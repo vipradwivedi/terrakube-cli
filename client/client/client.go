@@ -3,10 +3,12 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"terrakube/config"
 
 	"github.com/google/jsonapi"
 )
@@ -25,8 +27,6 @@ type Client struct {
 	HttpClient   *http.Client
 	BasePath     string
 }
-
-var defaultPath string = "/api/v1/"
 
 func (c *Client) newRequest(method, path string, body interface{}) (*http.Request, error) {
 	rel := &url.URL{Path: c.BasePath + path}
@@ -55,7 +55,12 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Println("Error closing response body:", err)
+		}
+	}(resp.Body)
 	if v != nil {
 		err = json.NewDecoder(resp.Body).Decode(v)
 	}
@@ -82,13 +87,13 @@ func NewClient(httpClient *http.Client, token string, baseUrl *url.URL) *Client 
 
 	// Handle base path
 	if baseUrl.Path == "" {
-		c.BasePath = defaultPath
+		c.BasePath = config.CliConfig.DefaultApiVersion
 	} else {
 		c.BasePath = baseUrl.Path
 		if !strings.HasSuffix(c.BasePath, "/") {
 			c.BasePath += "/"
 		}
-		c.BasePath += defaultPath
+		c.BasePath += config.CliConfig.DefaultApiVersion
 	}
 
 	return c
