@@ -1,20 +1,21 @@
 # Terrakube CLI
-`terrakube` is Terrakube Server on the command line. It brings organizations, workspaces and other Terrakube concepts to the terminal.
 
-<img src='https://svgshare.com/i/aw1.svg' title='Terrakube CLI' />
+`terrakube` is Terrakube Server on the command line. It brings organizations, workspaces and other Terrakube concepts to the terminal.
 
 ## Documentation
 
 [See the manual][manual] for setup and usage instructions.
+
 ## Contributing
 
-If anything feels off, or if you feel that some functionality is missing, please check out the [contributing page][contributing]. There you will find instructions for sharing your feedback, building the tool locally, and submitting pull requests to the project.
+If anything feels off, or if you feel that some functionality is missing, please check out the [contributing page][contributing].
+There you will find instructions for sharing your feedback, building the tool locally, and submitting pull requests to the project.
 
 ## Installation
 
 ### macOS
-`terrakube` is available via [Homebrew][] and as a downloadable binary from the [releases page][].
 
+`terrakube` is available via [Homebrew][] and as a downloadable binary from the [releases page][].
 
 #### Homebrew
 
@@ -22,9 +23,9 @@ If anything feels off, or if you feel that some functionality is missing, please
 | ----------------- | ----------------- |
 | `brew install azbuilder/cli/terrakube` | `brew upgrade terrakube` |
 
-
 ### Linux
 
+Download binary from [releases page][].
 
 ### Windows
 
@@ -35,7 +36,6 @@ If anything feels off, or if you feel that some functionality is missing, please
 | Install:           | Upgrade:           |
 | ------------------ | ------------------ |
 | `choco install terrakube` | `choco upgrade terrakube` |
-
 
 ### Other platforms
 

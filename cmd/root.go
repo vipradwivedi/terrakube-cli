@@ -1,55 +1,96 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/spf13/cobra/doc"
+	"github.com/spf13/pflag"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strings"
 
+	"terrakube/cmd/job"
+	"terrakube/cmd/module"
+	"terrakube/cmd/organization"
+	"terrakube/cmd/team"
+	"terrakube/cmd/variable"
+	"terrakube/cmd/workspace"
+	"terrakube/config"
+
 	"github.com/fatih/color"
-	"github.com/kataras/tablewriter"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-
 	"github.com/spf13/viper"
-
-	"terrakube/client/client"
 )
 
 var cfgFile string
 var output string
 var envPrefix string = "TERRAKUBE"
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
+// RootCmd represents the base command when called without any subcommands
+var RootCmd = &cobra.Command{
 	Use:   "terrakube",
 	Short: "terrakube command line tool",
 	Long: `
 terrakube is a CLI to handle remote terraform workspace and modules in organizations 
 and handle all the lifecycle (plan, apply, destroy).`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Set the global config before any command runs
+		config.CliConfig.ConfigFileLocation = cfgFile
+		config.CliConfig.OutputFormat = output
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
+// This is called by main.main(). It only needs to happen once to the RootCmd.
 func Execute() {
-	cobra.CheckErr(rootCmd.Execute())
+	cobra.CheckErr(RootCmd.Execute())
+	err := doc.GenMarkdownTree(RootCmd, "./docs")
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.terrakube-cli.yaml)")
-	rootCmd.PersistentFlags().StringVar(&output, "output", "json", "Use json, table, tsv or none to format CLI output")
-	_ = viper.BindPFlag("output", rootCmd.Flags().Lookup("output"))
-	_ = rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.terrakube-cli.yaml)")
+	_ = viper.BindPFlag("root.config", RootCmd.Flags().Lookup("config"))
+
+	RootCmd.PersistentFlags().StringVar(&output, "output", "json", "Use json, table, tsv, markdown or none to format CLI output")
+	_ = viper.BindPFlag("root.output", RootCmd.Flags().Lookup("output"))
+
+	_ = RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	RootCmd.AddCommand(job.Cmd)
+	RootCmd.AddCommand(organization.Cmd)
+	RootCmd.AddCommand(module.Cmd)
+	RootCmd.AddCommand(team.Cmd)
+	RootCmd.AddCommand(variable.Cmd)
+	RootCmd.AddCommand(workspace.Cmd)
+
+	RootCmd.AddCommand(&cobra.Command{
+		Use:    "docs",
+		Short:  "Generate documentation",
+		Hidden: true, // This makes the command hidden
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("Generating documentation...")
+			// Ensure the docs directory exists
+			if err := os.MkdirAll("./docs", 0755); err != nil {
+				fmt.Printf("Error creating docs directory: %v\n", err)
+				os.Exit(1)
+			}
+			err := doc.GenMarkdownTree(RootCmd, "./docs")
+			if err != nil {
+				fmt.Printf("Error generating docs: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Documentation generated in ./docs")
+		},
+	})
 
 	cobra.AddTemplateFunc("StyleHeading", color.New(color.FgCyan).SprintFunc())
-	usageTemplate := rootCmd.UsageTemplate()
+	usageTemplate := RootCmd.UsageTemplate()
 	usageTemplate = strings.NewReplacer(
 		`Usage:`, `{{StyleHeading "Usage:"}}`,
 		`Aliases:`, `{{StyleHeading "Aliases:"}}`,
@@ -57,9 +98,10 @@ func init() {
 		`Global Flags:`, `{{StyleHeading "Global Flags:"}}`,
 		`Examples:`, `{{StyleHeading "Examples:"}}`,
 	).Replace(usageTemplate)
+
 	re := regexp.MustCompile(`(?m)^Flags:\s*$`)
 	usageTemplate = re.ReplaceAllLiteralString(usageTemplate, `{{StyleHeading "Flags:"}}`)
-	rootCmd.SetUsageTemplate(usageTemplate)
+	RootCmd.SetUsageTemplate(usageTemplate)
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -83,86 +125,7 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
 
-	postInitCommands(rootCmd.Commands())
-}
-
-func newClient() *client.Client {
-	baseURL, err := url.Parse(viper.GetString("api_url"))
-	if err != nil {
-		fmt.Printf("Error parsing API URL: %v\n", err)
-		os.Exit(1)
-	}
-
-	return client.NewClient(nil, viper.GetString("token"), baseURL)
-}
-
-func renderOutput(result interface{}, format string) {
-	switch {
-	case format == "json":
-		printJSON, err := json.MarshalIndent(result, "", "    ")
-		if err != nil {
-			log.Fatal("Failed to generate json", err)
-		}
-		fmt.Printf("%s\n", string(printJSON))
-	case format == "tsv":
-		data, _ := splitInterface(result)
-		for _, v := range data {
-			fmt.Println(strings.Join(v[:], "\t"))
-		}
-	case format == "table":
-		data, header := splitInterface(result)
-		if len(data) > 0 {
-			table := tablewriter.NewWriter(os.Stdout)
-			table.AppendBulk(data)
-			table.SetHeader(header)
-			table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-			table.SetCaption(true, " ")
-			table.SetCenterSeparator("|")
-			table.Render()
-		}
-	case format == "none":
-
-	}
-}
-
-func splitInterface(input interface{}) ([][]string, []string) {
-	reflectData := reflect.ValueOf(input)
-	headers := make([]string, 0)
-	headers = append(headers, "ID")
-	result := make([][]string, 0)
-	if reflectData.Kind() == reflect.Slice {
-		for i := 0; i < reflectData.Len(); i++ {
-			data := reflectData.Index(i).Interface()
-			d := reflect.Indirect(reflect.ValueOf(data))
-
-			row := make([]string, 0)
-			id := d.FieldByName("ID").String()
-			row = append(row, id)
-
-			attr := reflect.Indirect(reflect.ValueOf(d.FieldByName("Attributes").Interface()))
-			for j := 0; j < attr.NumField(); j++ {
-				if i == 0 {
-					headers = append(headers, attr.Type().Field(j).Name)
-				}
-				row = append(row, attr.Field(j).String())
-			}
-			result = append(result, row)
-		}
-	} else {
-		d := reflect.Indirect(reflectData)
-		row := make([]string, 0)
-		id := d.FieldByName("ID").String()
-		row = append(row, id)
-
-		attr := reflect.Indirect(reflect.ValueOf(d.FieldByName("Attributes").Interface()))
-		for j := 0; j < attr.NumField(); j++ {
-			headers = append(headers, attr.Type().Field(j).Name)
-			row = append(row, attr.Field(j).String())
-		}
-		result = append(result, row)
-
-	}
-	return result, headers
+	postInitCommands(RootCmd.Commands())
 }
 
 func postInitCommands(commands []*cobra.Command) {

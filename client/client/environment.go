@@ -1,9 +1,9 @@
 package client
 
 import (
-	"terrakube/client/models"
 	"fmt"
 	"net/http"
+	"terrakube/client/models"
 )
 
 type EnvironmentClient struct {

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
+	"terrakube/cmd/utils"
+	"terrakube/config"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,14 +37,14 @@ var loginCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		login()
 	},
-	Example: fmt.Sprintf(loginExamples, rootCmd.Use),
+	Example: fmt.Sprintf(loginExamples, config.CliConfig.CommandName, config.CliConfig.CommandName),
 }
 
 var apiURL string
 var patToken string
 
 func init() {
-	rootCmd.AddCommand(loginCmd)
+	RootCmd.AddCommand(loginCmd)
 	loginCmd.Flags().StringVarP(&apiURL, "api-url", "a", "", "API URL (required)")
 	_ = loginCmd.MarkFlagRequired("api-url")
 	_ = viper.BindEnv("api-url", "TERRAKUBE_API_URL")
@@ -63,7 +64,7 @@ func login() {
 		return
 	}
 
-	client := newClient()
+	client := utils.NewClient()
 	client.Token = patToken
 	client.BaseURL = baseURL
 
@@ -74,17 +75,9 @@ func login() {
 		return
 	}
 
-	// Save configuration
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Printf("Error getting home directory: %v\n", err)
-		return
-	}
-
-	configFile := filepath.Join(home, ".terrakube-cli.yaml")
-	viper.SetConfigFile(configFile)
-	viper.Set("api_url", apiURL)
-	viper.Set("token", patToken)
+	viper.SetConfigFile(config.CliConfig.ConfigFileLocation)
+	viper.Set("api-url", apiURL)
+	viper.Set("pat", patToken)
 
 	err = viper.WriteConfig()
 	if err != nil {
